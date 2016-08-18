@@ -1,0 +1,102 @@
+---
+title: "Practical Machine Learning Project"
+author: "Jon Ide"
+date: "August 17, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+```
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Input the Data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+After downloading the data into the working directory, we input it into R:
+
+```{r, cache=TRUE}
+setwd("/Users/jide/Courses/Coursera/Data Science/DS8 Machine Learning/Project")
+training <- read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+dim(training)
+names(training)
+```
+
+## Clean and Prepare the Data
+
+The first seven columns appear to be identifying information only and are therefore not relevant for the model, so we delete them.
+
+```{r, cache=TRUE}
+training <- training[,-(1:7)]
+testing <- testing[,-(1:7)]
+```
+
+We split the training set into two sets. 70% will go into the set we'll actually use for training; the other 30% will be used for testing the learned model.
+
+```{r, cache=TRUE}
+set.seed(12345)
+trainingSplit <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+trainingData <- training[trainingSplit, ]; 
+testingData <- training[-trainingSplit, ]
+```
+
+We locate the covariates that have near-zero variance and remove them.
+
+```{r, cache=TRUE}
+nzv <- nearZeroVar(trainingData, saveMetrics=TRUE)
+# How many near zero variance covatiates are there?
+sum(nzv$nzv)
+trainingData <- trainingData[,!nzv$nzv]
+testingData <- testingData[,!nzv$nzv]
+```
+
+We get rid of covariates that have more than 10% missing values.
+
+```{r, cache=TRUE}
+completeColumns  <- apply(!is.na(trainingData), 2, sum) >= 0.9 * nrow(trainingData)
+trainingData <- trainingData[, completeColumns]
+testingData  <- testingData[, completeColumns]
+```
+
+## Learning the Model
+
+We use the training data to train a random forest.
+
+```{r}
+rf <- randomForest(classe ~. , data=trainingData, na.action=na.omit)
+rf
+```
+
+The output above includes the OOB (out-of-bag) error rate (0.5%), which gives a good estimate of out-of-sample error (see https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr).
+
+Then we use the random forest to predict the classe variable on our testingData set and see how accurate the model predictions were.
+
+```{r}
+predictRF <- predict(rf, testingData, type = "class")
+confusionMatrix(predictRF, testingData$classe)
+```
+
+The resulting accuracy is very high (99.3%), so we'll accept this model. Alternatively, we could produce several different kinds of models and combine their results (e.g., by majority voting), but there isn't much room for improvement, so we'll stop here.
+
+Finally, we use the model to predict the values on the original testing set to obtain the values to be used in the assignment quiz.
+
+```{r}
+predictions <- predict(rf, newdata=testing)
+# The quiz answers:
+predictions
+```
+
+
